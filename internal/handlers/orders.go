@@ -62,28 +62,31 @@ func CreateOrder(d *OrdersDeps) http.HandlerFunc {
 			Delivery:      req.Delivery,
 			PaymentID:     req.PaymentID,
 		}
-		if err := d.Orders.Create(r.Context(), o); err != nil {
+		inserted, err := d.Orders.Create(r.Context(), o)
+		if err != nil {
 			log.Printf("order create: %v", err)
 			writeError(w, http.StatusInternalServerError, "failed to create order")
 			return
 		}
 
-		go func(o repo.Order) {
-			ctx, cancel := context.WithTimeout(context.Background(), 10*1e9)
-			defer cancel()
-			tgItems := make([]telegram.Item, 0, len(o.Items))
-			for _, it := range o.Items {
-				tgItems = append(tgItems, telegram.Item{Name: it.Name, Qty: it.Qty, Price: it.Price})
-			}
-			err := d.Telegram.SendOrderNotification(ctx, telegram.Order{
-				Name: o.CustomerName, Phone: o.CustomerPhone, Address: o.Address,
-				Comment: o.Comment, ReceiveMethod: o.ReceiveMethod, PayMethod: o.PayMethod,
-				DeliveryTime: o.DeliveryTime, Items: tgItems, Total: o.Total,
-			})
-			if err != nil {
-				log.Printf("telegram notify failed: %v", err)
-			}
-		}(*o)
+		if inserted {
+			go func(o repo.Order) {
+				ctx, cancel := context.WithTimeout(context.Background(), 10*1e9)
+				defer cancel()
+				tgItems := make([]telegram.Item, 0, len(o.Items))
+				for _, it := range o.Items {
+					tgItems = append(tgItems, telegram.Item{Name: it.Name, Qty: it.Qty, Price: it.Price})
+				}
+				err := d.Telegram.SendOrderNotification(ctx, telegram.Order{
+					Name: o.CustomerName, Phone: o.CustomerPhone, Address: o.Address,
+					Comment: o.Comment, ReceiveMethod: o.ReceiveMethod, PayMethod: o.PayMethod,
+					DeliveryTime: o.DeliveryTime, Items: tgItems, Total: o.Total,
+				})
+				if err != nil {
+					log.Printf("telegram notify failed: %v", err)
+				}
+			}(*o)
+		}
 
 		writeJSON(w, http.StatusCreated, map[string]any{
 			"id":     o.ID,

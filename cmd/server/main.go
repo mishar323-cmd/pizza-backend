@@ -65,6 +65,7 @@ func main() {
 	mux.HandleFunc("POST /api/create-payment", handlers.CreatePayment(yk))
 	mux.HandleFunc("POST /api/notify-telegram", handlers.NotifyTelegram(tg))
 	mux.HandleFunc("POST /api/orders", handlers.CreateOrder(orderDeps))
+	mux.HandleFunc("POST /api/yookassa/webhook", handlers.YooKassaWebhook(orderDeps))
 	mux.HandleFunc("POST /api/iiko/order", handlers.IikoOrder(ik))
 
 	mux.HandleFunc("POST /api/admin/login", handlers.AdminLogin(adminDeps))

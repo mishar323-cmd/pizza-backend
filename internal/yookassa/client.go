@@ -37,11 +37,12 @@ type Item struct {
 }
 
 type CreatePaymentRequest struct {
-	Amount      float64 `json:"amount"`
-	Description string  `json:"description"`
-	ReturnURL   string  `json:"returnUrl"`
-	Phone       string  `json:"phone"`
-	Items       []Item  `json:"items"`
+	Amount      float64           `json:"amount"`
+	Description string            `json:"description"`
+	ReturnURL   string            `json:"returnUrl"`
+	Phone       string            `json:"phone"`
+	Items       []Item            `json:"items"`
+	Metadata    map[string]string `json:"metadata,omitempty"`
 }
 
 func (c *Client) CreatePayment(ctx context.Context, req CreatePaymentRequest) ([]byte, int, error) {
@@ -78,6 +79,17 @@ func (c *Client) CreatePayment(ctx context.Context, req CreatePaymentRequest) ([
 			"customer": map[string]string{"phone": normalizePhone(req.Phone)},
 			"items":    receiptItems,
 		},
+	}
+	if len(req.Metadata) > 0 {
+		// YooKassa caps each value at 512 chars; trim defensively.
+		md := make(map[string]string, len(req.Metadata))
+		for k, v := range req.Metadata {
+			if len(v) > 500 {
+				v = v[:500]
+			}
+			md[k] = v
+		}
+		payload["metadata"] = md
 	}
 
 	body, err := json.Marshal(payload)

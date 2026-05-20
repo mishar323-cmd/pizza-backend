@@ -40,20 +40,41 @@ type Orders struct{ pool *pgxpool.Pool }
 
 func NewOrders(pool *pgxpool.Pool) *Orders { return &Orders{pool: pool} }
 
-func (r *Orders) Create(ctx context.Context, o *Order) error {
+// Create inserts an order. Returns (inserted, err). When payment_id is set and
+// a row with that payment_id already exists, the existing row's fields are
+// loaded into o and inserted=false (idempotent). For cash orders payment_id is
+// empty so inserted is always true.
+func (r *Orders) Create(ctx context.Context, o *Order) (bool, error) {
 	itemsJSON, err := json.Marshal(o.Items)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return r.pool.QueryRow(ctx, `
+	err = r.pool.QueryRow(ctx, `
 		INSERT INTO orders(number, customer_name, customer_phone, address, zone, comment,
 			receive_method, pay_method, delivery_time, items, total, delivery, status, eta_minutes, assigned_to, payment_id)
 		VALUES (nextval('order_number_seq'), $1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12, $13, $14, $15)
+		ON CONFLICT (payment_id) WHERE payment_id IS NOT NULL AND payment_id <> ''
+		DO NOTHING
 		RETURNING id, number, status, eta_minutes, created_at, updated_at`,
 		o.CustomerName, o.CustomerPhone, o.Address, o.Zone, o.Comment,
 		o.ReceiveMethod, o.PayMethod, o.DeliveryTime, string(itemsJSON), o.Total,
 		o.Delivery, ifEmpty(o.Status, "new"), ifZeroInt(o.EtaMinutes, 35), o.AssignedTo, o.PaymentID,
 	).Scan(&o.ID, &o.Number, &o.Status, &o.EtaMinutes, &o.CreatedAt, &o.UpdatedAt)
+	if err == nil {
+		return true, nil
+	}
+	if err.Error() != "no rows in result set" {
+		return false, err
+	}
+	// Conflict on payment_id — load the existing row instead.
+	if o.PaymentID == "" {
+		return false, err
+	}
+	loadErr := r.pool.QueryRow(ctx, `
+		SELECT id, number, status, eta_minutes, created_at, updated_at
+		FROM orders WHERE payment_id = $1`, o.PaymentID,
+	).Scan(&o.ID, &o.Number, &o.Status, &o.EtaMinutes, &o.CreatedAt, &o.UpdatedAt)
+	return false, loadErr
 }
 
 func (r *Orders) List(ctx context.Context, limit int) ([]Order, error) {
