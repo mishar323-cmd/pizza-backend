@@ -1,0 +1,4 @@
+server
+*_test.go
+*.md
+.env
