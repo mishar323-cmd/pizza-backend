@@ -9,7 +9,10 @@ import (
 
 type ctxKey int
 
-const claimsKey ctxKey = 0
+const (
+	claimsKey     ctxKey = 0
+	userClaimsKey ctxKey = 1
+)
 
 func RequireAdmin(secret []byte) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
@@ -33,6 +36,34 @@ func RequireAdmin(secret []byte) func(http.Handler) http.Handler {
 
 func FromContext(ctx context.Context) *Claims {
 	if c, ok := ctx.Value(claimsKey).(*Claims); ok {
+		return c
+	}
+	return nil
+}
+
+// RequireUser middleware validates a customer (phone-auth) JWT.
+func RequireUser(secret []byte) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			h := r.Header.Get("Authorization")
+			if !strings.HasPrefix(h, "Bearer ") {
+				writeJSONErr(w, http.StatusUnauthorized, "missing token")
+				return
+			}
+			tokenStr := strings.TrimPrefix(h, "Bearer ")
+			claims, err := ParseUserToken(secret, tokenStr)
+			if err != nil {
+				writeJSONErr(w, http.StatusUnauthorized, "invalid token")
+				return
+			}
+			ctx := context.WithValue(r.Context(), userClaimsKey, claims)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func UserFromContext(ctx context.Context) *UserClaims {
+	if c, ok := ctx.Value(userClaimsKey).(*UserClaims); ok {
 		return c
 	}
 	return nil

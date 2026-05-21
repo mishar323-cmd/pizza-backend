@@ -10,17 +10,19 @@ import (
 )
 
 type Config struct {
-	YooKassaShopID  string
-	YooKassaSecret  string
-	TGBotToken      string
-	TGChatID        string
-	Port            string
-	AllowOrigin     string
-	DatabaseURL     string
-	JWTSecret       []byte
-	SeedAdminLogin  string
-	SeedAdminPass   string
-	SeedAdminName   string
+	YooKassaShopID string
+	YooKassaSecret string
+	TGBotToken     string
+	TGChatID       string
+	SMSRuAPIID     string
+	SMSRuSender    string
+	Port           string
+	AllowOrigin    string
+	DatabaseURL    string
+	JWTSecret      []byte
+	SeedAdminLogin string
+	SeedAdminPass  string
+	SeedAdminName  string
 }
 
 func Load() *Config {
@@ -28,16 +30,18 @@ func Load() *Config {
 	_ = godotenv.Load("../.env")
 
 	cfg := &Config{
-		YooKassaShopID:  os.Getenv("YOOKASSA_SHOP_ID"),
-		YooKassaSecret:  os.Getenv("YOOKASSA_SECRET"),
-		TGBotToken:      os.Getenv("TG_BOT_TOKEN"),
-		TGChatID:        os.Getenv("TG_CHAT_ID"),
-		Port:            getenvDefault("PORT", "8080"),
-		AllowOrigin:     os.Getenv("ALLOW_ORIGIN"),
-		DatabaseURL:     os.Getenv("DATABASE_URL"),
-		SeedAdminLogin:  getenvDefault("ADMIN_LOGIN", "admin"),
-		SeedAdminPass:   os.Getenv("ADMIN_PASSWORD"),
-		SeedAdminName:   getenvDefault("ADMIN_NAME", "Администратор"),
+		YooKassaShopID: os.Getenv("YOOKASSA_SHOP_ID"),
+		YooKassaSecret: os.Getenv("YOOKASSA_SECRET"),
+		TGBotToken:     os.Getenv("TG_BOT_TOKEN"),
+		TGChatID:       os.Getenv("TG_CHAT_ID"),
+		SMSRuAPIID:     os.Getenv("SMS_RU_API_ID"),
+		SMSRuSender:    os.Getenv("SMS_RU_SENDER"),
+		Port:           getenvDefault("PORT", "8080"),
+		AllowOrigin:    os.Getenv("ALLOW_ORIGIN"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		SeedAdminLogin: getenvDefault("ADMIN_LOGIN", "admin"),
+		SeedAdminPass:  os.Getenv("ADMIN_PASSWORD"),
+		SeedAdminName:  getenvDefault("ADMIN_NAME", "Администратор"),
 	}
 
 	if cfg.DatabaseURL == "" {
@@ -48,6 +52,9 @@ func Load() *Config {
 	}
 	if cfg.TGBotToken == "" || cfg.TGChatID == "" {
 		log.Println("WARN: TG_BOT_TOKEN/TG_CHAT_ID not set, Telegram notifications disabled")
+	}
+	if cfg.SMSRuAPIID == "" {
+		log.Println("WARN: SMS_RU_API_ID not set, SMS sending + phone OTP disabled")
 	}
 
 	secret := os.Getenv("JWT_SECRET")

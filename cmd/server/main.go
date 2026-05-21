@@ -16,6 +16,7 @@ import (
 	"pizza-backend/internal/handlers"
 	"pizza-backend/internal/iiko"
 	"pizza-backend/internal/repo"
+	"pizza-backend/internal/sms"
 	"pizza-backend/internal/telegram"
 	"pizza-backend/internal/yookassa"
 )
@@ -48,17 +49,23 @@ func main() {
 	admins := repo.NewAdmins(pool)
 	orders := repo.NewOrders(pool)
 	settings := repo.NewSettings(pool)
+	users := repo.NewUsers(pool)
+	otps := repo.NewOTPs(pool)
 
 	seedAdmin(ctx, admins, cfg)
 
 	yk := yookassa.NewClient(cfg.YooKassaShopID, cfg.YooKassaSecret)
 	tg := telegram.NewClient(cfg.TGBotToken, cfg.TGChatID)
 	ik := iiko.NewClient()
+	smsClient := sms.NewClient(cfg.SMSRuAPIID, cfg.SMSRuSender)
 
 	adminDeps := &handlers.AdminDeps{
 		Admins: admins, Orders: orders, Settings: settings, Secret: cfg.JWTSecret,
 	}
 	orderDeps := &handlers.OrdersDeps{Orders: orders, Telegram: tg}
+	userAuthDeps := &handlers.UserAuthDeps{
+		Users: users, OTPs: otps, SMS: smsClient, Secret: cfg.JWTSecret,
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/health", handlers.Health)
@@ -69,6 +76,15 @@ func main() {
 	mux.HandleFunc("POST /api/iiko/order", handlers.IikoOrder(ik))
 
 	mux.HandleFunc("POST /api/admin/login", handlers.AdminLogin(adminDeps))
+
+	// Customer (phone+OTP) auth
+	mux.HandleFunc("POST /api/auth/request-otp", handlers.RequestOTP(userAuthDeps))
+	mux.HandleFunc("POST /api/auth/verify-otp", handlers.VerifyOTP(userAuthDeps))
+
+	requireUser := auth.RequireUser(cfg.JWTSecret)
+	userMux := http.NewServeMux()
+	userMux.HandleFunc("GET /api/auth/me", handlers.UserMe(userAuthDeps))
+	mux.Handle("/api/auth/me", requireUser(userMux))
 
 	requireAdmin := auth.RequireAdmin(cfg.JWTSecret)
 	adminMux := http.NewServeMux()
